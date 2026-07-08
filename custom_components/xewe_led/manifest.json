@@ -1,0 +1,14 @@
+{
+  "domain": "xewe_led",
+  "name": "XEWE LED-OS",
+  "version": "0.1.0",
+  "config_flow": true,
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "dependencies": ["mqtt"],
+  "zeroconf": ["_xewe-led._tcp.local."],
+  "documentation": "https://github.com/xewe/xewe-led-os-homeassistant",
+  "issue_tracker": "https://github.com/xewe/xewe-led-os-homeassistant/issues",
+  "codeowners": ["@xewe"],
+  "requirements": []
+}

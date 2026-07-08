@@ -1,0 +1,38 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Add XEWE Dock",
+        "description": "Enter the IP address shown by the device on your network.",
+        "data": {
+          "host": "Device IP address"
+        }
+      },
+      "pair": {
+        "title": "Pair XEWE Dock",
+        "description": "Enter the PIN shown by the device at {host}. Home Assistant will send the MQTT broker credentials to the device automatically. Override the broker address only if the device cannot reach it.",
+        "data": {
+          "pin": "Pairing PIN",
+          "broker_override": "MQTT broker address (optional)"
+        }
+      }
+    },
+    "error": {
+      "invalid_pin": "The PIN was rejected by the device. Check the PIN and that the device is still in pairing mode.",
+      "cannot_connect": "Could not reach the device to provision it.",
+      "no_broker": "Could not determine a broker address reachable by the device. Enter one manually."
+    },
+    "abort": {
+      "already_configured": "This device is already configured.",
+      "no_mac": "The device did not advertise a MAC address and cannot be identified.",
+      "mqtt_not_configured": "The MQTT integration is not set up. Install the Mosquitto broker add-on and add the MQTT integration, then try again."
+    }
+  },
+  "issues": {
+    "mqtt_not_configured": {
+      "title": "XEWE LED-OS requires MQTT",
+      "description": "XEWE LED-OS needs the MQTT integration. Install the Mosquitto broker add-on and add the MQTT integration, then reload XEWE LED-OS."
+    }
+  }
+}
