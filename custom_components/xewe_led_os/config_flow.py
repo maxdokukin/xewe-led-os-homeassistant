@@ -16,14 +16,8 @@ import voluptuous as vol
 
 from homeassistant.components.mqtt.const import CONF_BROKER
 from homeassistant.components.network import async_get_source_ip
-from homeassistant.config_entries import (
-    SOURCE_USER,
-    ConfigEntryState,
-    ConfigFlow,
-    ConfigFlowResult,
-)
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_PASSWORD, CONF_PORT, CONF_USERNAME
-from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
@@ -32,9 +26,7 @@ from .const import (
     CONF_HOST,
     CONF_MAC,
     DOMAIN,
-    ISSUE_MQTT_NOT_CONFIGURED,
     LOCAL_BROKER_HOSTS,
-    MQTT_DOCS_URL,
     PROVISION_PATH,
     PROVISION_TIMEOUT,
 )
@@ -50,47 +42,10 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         self._host: str | None = None
         self._mac: str | None = None
 
-    def _abort_if_mqtt_missing(self) -> ConfigFlowResult | None:
-        """Guide the user to set up MQTT when it is not configured yet.
-
-        Rather than a dead end, this kicks off the built-in MQTT config flow (on
-        Home Assistant OS that offers the "Use the official Mosquitto MQTT Broker
-        app" option) so the prerequisite can be completed in one place, raises a
-        repair as a persistent reminder, then aborts our own flow.
-        """
-        mqtt_entries = self.hass.config_entries.async_entries("mqtt")
-        if any(entry.state is ConfigEntryState.LOADED for entry in mqtt_entries):
-            return None
-
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            ISSUE_MQTT_NOT_CONFIGURED,
-            is_fixable=False,
-            is_persistent=True,
-            severity=ir.IssueSeverity.ERROR,
-            translation_key=ISSUE_MQTT_NOT_CONFIGURED,
-            learn_more_url=MQTT_DOCS_URL,
-        )
-
-        # Launch MQTT setup for the user unless it is already open. MQTT is
-        # single-instance, so a duplicate init would simply abort.
-        if not self.hass.config_entries.flow.async_progress_by_handler("mqtt"):
-            self.hass.async_create_task(
-                self.hass.config_entries.flow.async_init(
-                    "mqtt", context={"source": SOURCE_USER}
-                )
-            )
-
-        return self.async_abort(reason=ISSUE_MQTT_NOT_CONFIGURED)
-
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
         """Handle a device discovered over mDNS."""
-        if (abort := self._abort_if_mqtt_missing()) is not None:
-            return abort
-
         self._host = str(discovery_info.ip_address)
         self._mac = discovery_info.properties.get("mac")
         if not self._mac:
@@ -106,9 +61,6 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manual entry fallback: ask for the device IP, then pair."""
-        if (abort := self._abort_if_mqtt_missing()) is not None:
-            return abort
-
         if user_input is not None:
             self._host = user_input[CONF_HOST]
             return await self.async_step_pair()
