@@ -28,62 +28,7 @@ itself on every reboot.
 
 ---
 
-## Before you start: two prerequisites
-
-### 1. MQTT (the messaging system HA and the device talk over)
-
-Home Assistant and the device communicate through **MQTT**, a lightweight
-messaging system. You need an MQTT **broker** running and the **MQTT
-integration** added in Home Assistant first.
-
-How you install the broker depends on your Home Assistant install type:
-
-**A. Home Assistant OS or Supervised** (recommended — HA installs the broker for
-you):
-
-1. **Settings → Devices & Services → + Add integration**.
-2. Search for and pick **MQTT**, then choose **MQTT** again.
-3. Select **"Use the official Mosquitto MQTT Broker app."** Home Assistant
-   installs and starts the Mosquitto app and wires up the credentials for you.
-4. **Verify:** go to **Settings → Apps** and confirm **Mosquitto broker** is
-   listed and running.
-
-> No **"Use the official Mosquitto MQTT Broker app"** option (or no **Apps**
-> menu)? Then you're on Home Assistant **Container** or **Core**, which can't
-> install apps — use option B.
-
-**B. Home Assistant Container or Core** (no apps): run Mosquitto yourself, e.g.
-as a Docker container:
-
-```yaml
-# docker-compose.yml
-services:
-  mosquitto:
-    image: eclipse-mosquitto
-    container_name: mosquitto
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./mosquitto/config:/mosquitto/config
-      - ./mosquitto/data:/mosquitto/data
-```
-
-with a minimal `mosquitto/config/mosquitto.conf`:
-
-```conf
-listener 1883
-allow_anonymous true
-persistence true
-persistence_location /mosquitto/data/
-```
-
-Then **Settings → Devices & Services → + Add integration → MQTT**, and enter the
-**IP address of the machine running Mosquitto** with port **1883**.
-
-> If MQTT is not set up, this integration will refuse to load and show a Repair
-> notice telling you to configure MQTT first.
-
-### 2. HACS (the store for community integrations)
+## Before you start: one prerequisite — HACS
 
 This integration is not built into Home Assistant, so you install it through
 **HACS** (Home Assistant Community Store) — a tool that lets you install
@@ -91,6 +36,11 @@ integrations that aren't shipped with Home Assistant by default.
 
 If you don't already have HACS, follow the official install guide:
 https://www.hacs.xyz/docs/use/download/download/ — then continue below.
+
+> **What about MQTT?** The device talks to Home Assistant over MQTT, but you
+> don't need to set that up ahead of time. If MQTT isn't configured when you
+> pair the device, XeWe LED **opens MQTT setup for you** automatically — see
+> Step 3.
 
 ---
 
@@ -102,6 +52,13 @@ https://www.hacs.xyz/docs/use/download/download/ — then continue below.
    click **Add**.
 4. Find **XeWe LED** in the list, open it, and click **Download**.
 5. **Restart Home Assistant** (Settings → System → Restart).
+
+> **Don't want to use HACS?** You can install manually instead: copy the
+> [`custom_components/xewe_led_os/`](custom_components/xewe_led_os) folder from
+> this repo into your Home Assistant config folder (the one with
+> `configuration.yaml`) so the path is
+> `<config>/custom_components/xewe_led_os/`, then restart. Everything else works
+> the same; you just won't get HACS's update notifications.
 
 ## Step 2 — Flash the firmware onto the ESP32
 
@@ -137,6 +94,16 @@ The device must be on the **same Wi-Fi network** as Home Assistant.
    connects, and a switch entity named `switch.xewe_led_os_<id>` is created.
    Toggle it and the GPIO pin turns on/off.
 
+**First time only — setting up MQTT.** If MQTT isn't configured yet, XeWe LED
+automatically opens the MQTT setup for you and asks you to finish it first:
+
+- **Home Assistant OS / Supervised:** choose **"Use the official Mosquitto MQTT
+  Broker app"** — HA installs and starts the broker for you. Then click
+  **Configure** on XeWe LED again.
+- **Home Assistant Container / Core** (no apps): run your own broker first (e.g.
+  the `eclipse-mosquitto` Docker image on port `1883`), point the MQTT
+  integration at its IP address, then click **Configure** on XeWe LED again.
+
 **If the 5-minute window runs out first**, the Serial Monitor prints a timeout —
 just press `y` again to reopen it. Once paired, the credentials are saved on the
 device, so it reconnects automatically after reboots or power loss.
@@ -153,7 +120,7 @@ device, so it reconnects automatically after reboots or power loss.
 
 | Path | What it is |
 | --- | --- |
-| `custom_components/xewe_led_os/` | The Home Assistant integration: checks that MQTT is ready, discovers the device, and hands it the broker credentials. |
+| `custom_components/xewe_led_os/` | The Home Assistant integration: makes sure MQTT is set up (opening MQTT setup for you if it isn't), discovers the device over mDNS, and hands it the broker credentials. |
 | `firmware/xewe_led_os/xewe_led_os.ino` | The ESP32 sample firmware: connects to Wi-Fi, pairs, and exposes one GPIO as an on/off switch. |
 
 ## Scope
