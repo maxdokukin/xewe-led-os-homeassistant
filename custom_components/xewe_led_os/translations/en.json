@@ -24,13 +24,13 @@
     "abort": {
       "already_configured": "This device is already configured.",
       "no_mac": "The device did not advertise a MAC address and cannot be identified.",
-      "mqtt_not_configured": "The MQTT integration is not set up. Install the Mosquitto broker add-on and add the MQTT integration, then try again."
+      "mqtt_not_configured": "MQTT isn't set up yet, so we've opened MQTT setup for you (on Home Assistant OS, choose \"Use the official Mosquitto MQTT Broker app\"). Finish that, then add XeWe LED again."
     }
   },
   "issues": {
     "mqtt_not_configured": {
       "title": "XeWe LED requires MQTT",
-      "description": "XeWe LED needs the MQTT integration. Install the Mosquitto broker add-on and add the MQTT integration, then reload XeWe LED."
+      "description": "XeWe LED needs the MQTT integration. Add it under Settings → Devices & Services → Add integration → MQTT (on Home Assistant OS, choose \"Use the official Mosquitto MQTT Broker app\"), then reload XeWe LED."
     }
   }
 }

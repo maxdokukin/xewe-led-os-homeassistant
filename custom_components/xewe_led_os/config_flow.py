@@ -17,7 +17,7 @@ import voluptuous as vol
 from homeassistant.components import mqtt
 from homeassistant.components.mqtt.const import CONF_BROKER
 from homeassistant.components.network import async_get_source_ip
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import SOURCE_USER, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -47,9 +47,16 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         self._mac: str | None = None
 
     def _abort_if_mqtt_missing(self) -> ConfigFlowResult | None:
-        """Abort (and raise a repair) when the MQTT integration is not set up."""
+        """Guide the user to set up MQTT when it is not configured yet.
+
+        Rather than a dead end, this kicks off the built-in MQTT config flow (on
+        Home Assistant OS that offers the "Use the official Mosquitto MQTT Broker
+        app" option) so the prerequisite can be completed in one place, raises a
+        repair as a persistent reminder, then aborts our own flow.
+        """
         if mqtt.mqtt_config_entry_enabled(self.hass):
             return None
+
         ir.async_create_issue(
             self.hass,
             DOMAIN,
@@ -60,6 +67,16 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
             translation_key=ISSUE_MQTT_NOT_CONFIGURED,
             learn_more_url=MQTT_DOCS_URL,
         )
+
+        # Launch MQTT setup for the user unless it is already open. MQTT is
+        # single-instance, so a duplicate init would simply abort.
+        if not self.hass.config_entries.flow.async_progress_by_handler("mqtt"):
+            self.hass.async_create_task(
+                self.hass.config_entries.flow.async_init(
+                    "mqtt", context={"source": SOURCE_USER}
+                )
+            )
+
         return self.async_abort(reason=ISSUE_MQTT_NOT_CONFIGURED)
 
     async def async_step_zeroconf(
