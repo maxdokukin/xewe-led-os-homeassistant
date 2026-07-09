@@ -1,13 +1,12 @@
-"""Constants for the XEWE LED-OS integration."""
+"""Constants for the XeWe LED integration."""
 
 from __future__ import annotations
 
-DOMAIN = "xewe_led"
+DOMAIN = "xewe_led_os"
 
 # Config entry / discovery data keys
 CONF_HOST = "host"
 CONF_MAC = "mac"
-CONF_PIN = "pin"
 CONF_BROKER_OVERRIDE = "broker_override"
 
 # Firmware HTTP provisioning endpoint

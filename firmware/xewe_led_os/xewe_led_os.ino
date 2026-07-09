@@ -1,26 +1,25 @@
 /*
- * XEWE LED-OS dock — sample ESP32 firmware
+ * XeWe LED dock — sample ESP32 firmware
  * -----------------------------------------
  * Minimal on/off switch on a single GPIO, integrated with Home Assistant via
- * MQTT auto-discovery, with zero-typing "auto-pair":
+ * MQTT auto-discovery.
  *
- *   1. First boot with no Wi-Fi -> WiFiManager captive portal (AP "XEWE-Dock-XXXX").
- *   2. Once on Wi-Fi and not yet provisioned -> PAIRING MODE:
- *        - advertise mDNS service _xewe-led._tcp.local (TXT: mac, fw)
- *        - print a 6-digit PIN on Serial
- *        - accept POST /provision {host,port,user,pass,pin} during a time window
- *   3. On valid provision -> store broker creds in NVS, connect to MQTT,
- *        publish a RETAINED switch discovery config, and drive SWITCH_PIN.
+ *   1. Connects to Wi-Fi using the credentials defined below.
+ *   2. If not yet provisioned, prints a prompt on Serial. Press 'y' to enter
+ *      DISCOVERY MODE for 5 minutes:
+ *        - advertise mDNS service _xewe-led-os._tcp.local (TXT: mac, fw)
+ *        - accept POST /provision {host,port,user,pass} (no PIN)
+ *      If the window elapses, it prints a timeout message; press 'y' to retry.
+ *   3. On provision -> store broker creds in NVS, connect to MQTT, publish a
+ *      RETAINED switch discovery config, and drive SWITCH_PIN.
  *
  * Required Arduino libraries (Library Manager):
- *   - WiFiManager (tzapu)
  *   - PubSubClient (knolleary)
  *   - ArduinoJson (bblanchon)
  * Bundled with the ESP32 core: WiFi.h, ESPmDNS.h, WebServer.h, Preferences.h
  */
 
 #include <WiFi.h>
-#include <WiFiManager.h>
 #include <ESPmDNS.h>
 #include <WebServer.h>
 #include <Preferences.h>
@@ -28,12 +27,14 @@
 #include <ArduinoJson.h>
 
 // ---- User configuration -----------------------------------------------------
+#define WIFI_SSID "your-wifi-ssid"
+#define WIFI_PASS "your-wifi-password"
+
 #define SWITCH_PIN 26            // GPIO the relay/LED is wired to
 #define SWITCH_ACTIVE_HIGH true  // set false if your relay is active-low
 #define FW_VERSION "0.1.0"
-#define AP_PREFIX "XEWE-Dock-"
-#define PAIRING_WINDOW_MS 120000UL  // PIN validity per cycle (2 min)
-#define MQTT_BUFFER_SIZE 1024       // MUST exceed the discovery JSON size
+#define DISCOVERY_WINDOW_MS 300000UL  // 5 minutes
+#define MQTT_BUFFER_SIZE 1024         // MUST exceed the discovery JSON size
 
 // ---- Globals ----------------------------------------------------------------
 Preferences prefs;
@@ -41,9 +42,9 @@ WiFiClient net;
 PubSubClient mqtt(net);
 WebServer server(80);
 
-String deviceId;    // "xewe_dock_aabbccddeeff"
+String deviceId;    // "xewe_led_os_aabbccddeeff"
 String macHex;      // "aabbccddeeff"
-String baseTopic;   // "xewe/<deviceId>"
+String baseTopic;   // "xewe_led_os/<deviceId>"
 String cmdTopic, stateTopic, availTopic, discoveryTopic;
 
 String mqttHost, mqttUser, mqttPass;
@@ -52,7 +53,6 @@ uint16_t mqttPort = 1883;
 bool provisioned = false;
 bool pairing = false;
 unsigned long pairingStart = 0;
-char pin[7] = {0};
 bool switchState = false;
 
 // ---- Helpers ----------------------------------------------------------------
@@ -64,8 +64,8 @@ String macToHex() {
 }
 
 void buildTopics() {
-  deviceId = "xewe_dock_" + macHex;
-  baseTopic = "xewe/" + deviceId;
+  deviceId = "xewe_led_os_" + macHex;
+  baseTopic = "xewe_led_os/" + deviceId;
   cmdTopic = baseTopic + "/cmd";
   stateTopic = baseTopic + "/state";
   availTopic = baseTopic + "/avail";
@@ -77,8 +77,10 @@ void applySwitch(bool on) {
   digitalWrite(SWITCH_PIN, (on == SWITCH_ACTIVE_HIGH) ? HIGH : LOW);
 }
 
-void generatePin() {
-  snprintf(pin, sizeof(pin), "%06u", (unsigned)(esp_random() % 1000000UL));
+void printEnablePrompt() {
+  Serial.println("----------------------------------------");
+  Serial.println("[setup] Press 'y' to enable Home Assistant discovery");
+  Serial.println("----------------------------------------");
 }
 
 // ---- Persistence ------------------------------------------------------------
@@ -109,9 +111,9 @@ void saveCreds(const String &host, uint16_t port, const String &user,
   mqttPass = pass;
 }
 
-// ---- Pairing (mDNS + /provision) --------------------------------------------
+// ---- Discovery mode (mDNS + /provision) -------------------------------------
 void handleProvision() {
-  if (!pairing || (millis() - pairingStart) > PAIRING_WINDOW_MS) {
+  if (!pairing) {
     server.send(403, "application/json", "{\"error\":\"not_pairing\"}");
     return;
   }
@@ -120,15 +122,11 @@ void handleProvision() {
     server.send(400, "application/json", "{\"error\":\"bad_json\"}");
     return;
   }
-  if (strcmp(doc["pin"] | "", pin) != 0) {
-    server.send(403, "application/json", "{\"error\":\"invalid_pin\"}");
-    return;
-  }
 
   saveCreds(doc["host"] | "", doc["port"] | 1883, doc["user"] | "",
             doc["pass"] | "");
   server.send(200, "application/json", "{\"ok\":true}");
-  Serial.println("[pair] provisioned; leaving pairing mode");
+  Serial.println("[pair] provisioned; leaving discovery mode");
 
   provisioned = true;
   pairing = false;
@@ -137,24 +135,33 @@ void handleProvision() {
 }
 
 void startPairing() {
-  generatePin();
   pairing = true;
   pairingStart = millis();
 
-  String host = "xewe-dock-" + macHex.substring(6);
+  String host = "xewe-led-os-" + macHex.substring(6);
   if (MDNS.begin(host.c_str())) {
-    MDNS.addService("_xewe-led", "_tcp", 80);
-    MDNS.addServiceTxt("_xewe-led", "_tcp", "mac", macHex);
-    MDNS.addServiceTxt("_xewe-led", "_tcp", "fw", FW_VERSION);
+    MDNS.addService("_xewe-led-os", "_tcp", 80);
+    MDNS.addServiceTxt("_xewe-led-os", "_tcp", "mac", macHex);
+    MDNS.addServiceTxt("_xewe-led-os", "_tcp", "fw", FW_VERSION);
   }
   server.on("/provision", HTTP_POST, handleProvision);
   server.begin();
 
   Serial.println("========================================");
-  Serial.printf("[pair] PAIRING MODE — enter this PIN in HA: %s\n", pin);
-  Serial.printf("[pair] mDNS: %s._xewe-led._tcp.local  (%s)\n",
+  Serial.println("[pair] DISCOVERY MODE active for 5 minutes");
+  Serial.printf("[pair] mDNS: %s._xewe-led-os._tcp.local  (%s)\n",
                 host.c_str(), WiFi.localIP().toString().c_str());
+  Serial.println("[pair] Open HA > Settings > Devices & Services and configure");
+  Serial.println("       the discovered XeWe LED.");
   Serial.println("========================================");
+}
+
+void stopPairing() {
+  pairing = false;
+  server.stop();
+  MDNS.end();
+  Serial.println("[pair] Discovery timed out.");
+  Serial.println("[pair] Press 'y' to retry.");
 }
 
 // ---- MQTT -------------------------------------------------------------------
@@ -176,9 +183,9 @@ void publishDiscovery() {
   doc["payload_not_available"] = "offline";
   JsonObject dev = doc["device"].to<JsonObject>();
   dev["identifiers"][0] = deviceId;
-  dev["name"] = "XEWE Dock";
-  dev["manufacturer"] = "XEWE";
-  dev["model"] = "LED-OS Dock";
+  dev["name"] = "XeWe LED";
+  dev["manufacturer"] = "XeWe";
+  dev["model"] = "LED Dock";
   dev["sw_version"] = FW_VERSION;
 
   String payload;
@@ -222,6 +229,15 @@ void connectMqtt() {
   }
 }
 
+// ---- Serial input -----------------------------------------------------------
+bool pressedY() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'y' || c == 'Y') return true;
+  }
+  return false;
+}
+
 // ---- Arduino lifecycle ------------------------------------------------------
 void setup() {
   Serial.begin(115200);
@@ -229,17 +245,16 @@ void setup() {
   pinMode(SWITCH_PIN, OUTPUT);
   applySwitch(false);
 
-  WiFiManager wm;
-  macHex = macToHex();
-  String apName = String(AP_PREFIX) + macHex.substring(6);
-  Serial.printf("[wifi] connecting (portal AP: %s if needed)\n", apName.c_str());
-  if (!wm.autoConnect(apName.c_str())) {
-    Serial.println("[wifi] portal timed out, restarting");
-    ESP.restart();
+  Serial.printf("[wifi] connecting to %s ...\n", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
-  Serial.printf("[wifi] connected, ip=%s\n", WiFi.localIP().toString().c_str());
+  Serial.printf("\n[wifi] connected, ip=%s\n", WiFi.localIP().toString().c_str());
 
-  macHex = macToHex();  // MAC is stable now
+  macHex = macToHex();
   buildTopics();
 
   provisioned = loadCreds();
@@ -247,24 +262,23 @@ void setup() {
     Serial.println("[boot] credentials found, connecting to MQTT");
     connectMqtt();
   } else {
-    startPairing();
+    printEnablePrompt();
   }
 }
 
 void loop() {
-  if (pairing) {
-    server.handleClient();
-    if ((millis() - pairingStart) > PAIRING_WINDOW_MS) {
-      // Refresh the PIN so a captured one expires, and keep pairing usable.
-      generatePin();
-      pairingStart = millis();
-      Serial.printf("[pair] PIN expired, new PIN: %s\n", pin);
-    }
-    return;
-  }
-
   if (provisioned) {
     if (!mqtt.connected()) connectMqtt();
     mqtt.loop();
+    return;
   }
+
+  if (pairing) {
+    server.handleClient();
+    if ((millis() - pairingStart) > DISCOVERY_WINDOW_MS) stopPairing();
+    return;
+  }
+
+  // Idle: waiting for the user to enable discovery.
+  if (pressedY()) startPairing();
 }
