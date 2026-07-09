@@ -14,10 +14,14 @@ from typing import Any
 import aiohttp
 import voluptuous as vol
 
-from homeassistant.components import mqtt
 from homeassistant.components.mqtt.const import CONF_BROKER
 from homeassistant.components.network import async_get_source_ip
-from homeassistant.config_entries import SOURCE_USER, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    SOURCE_USER,
+    ConfigEntryState,
+    ConfigFlow,
+    ConfigFlowResult,
+)
 from homeassistant.const import CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -54,7 +58,8 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         app" option) so the prerequisite can be completed in one place, raises a
         repair as a persistent reminder, then aborts our own flow.
         """
-        if mqtt.mqtt_config_entry_enabled(self.hass):
+        mqtt_entries = self.hass.config_entries.async_entries("mqtt")
+        if any(entry.state is ConfigEntryState.LOADED for entry in mqtt_entries):
             return None
 
         ir.async_create_issue(
