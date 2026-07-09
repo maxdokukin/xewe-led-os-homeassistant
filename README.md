@@ -33,15 +33,52 @@ itself on every reboot.
 ### 1. MQTT (the messaging system HA and the device talk over)
 
 Home Assistant and the device communicate through **MQTT**, a lightweight
-messaging system. You need it running in Home Assistant first.
+messaging system. You need an MQTT **broker** running and the **MQTT
+integration** added in Home Assistant first.
 
-Easiest path (Home Assistant OS / Supervised):
+How you install the broker depends on your Home Assistant install type:
 
-1. **Settings → Add-ons → Add-on Store**.
-2. Search for **Mosquitto broker**, then **Install** and **Start** it.
-3. Go to **Settings → Devices & Services**. Home Assistant will offer to set up
-   the discovered **MQTT** integration — click **Configure** and accept the
-   defaults. Home Assistant now manages the MQTT login for you.
+**A. Home Assistant OS or Supervised** (recommended — HA installs the broker for
+you):
+
+1. **Settings → Devices & Services → + Add integration**.
+2. Search for and pick **MQTT**, then choose **MQTT** again.
+3. Select **"Use the official Mosquitto MQTT Broker app."** Home Assistant
+   installs and starts the Mosquitto app and wires up the credentials for you.
+4. **Verify:** go to **Settings → Apps** and confirm **Mosquitto broker** is
+   listed and running.
+
+> No **"Use the official Mosquitto MQTT Broker app"** option (or no **Apps**
+> menu)? Then you're on Home Assistant **Container** or **Core**, which can't
+> install apps — use option B.
+
+**B. Home Assistant Container or Core** (no apps): run Mosquitto yourself, e.g.
+as a Docker container:
+
+```yaml
+# docker-compose.yml
+services:
+  mosquitto:
+    image: eclipse-mosquitto
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+```
+
+with a minimal `mosquitto/config/mosquitto.conf`:
+
+```conf
+listener 1883
+allow_anonymous true
+persistence true
+persistence_location /mosquitto/data/
+```
+
+Then **Settings → Devices & Services → + Add integration → MQTT**, and enter the
+**IP address of the machine running Mosquitto** with port **1883**.
 
 > If MQTT is not set up, this integration will refuse to load and show a Repair
 > notice telling you to configure MQTT first.
@@ -49,7 +86,7 @@ Easiest path (Home Assistant OS / Supervised):
 ### 2. HACS (the store for community integrations)
 
 This integration is not built into Home Assistant, so you install it through
-**HACS** (Home Assistant Community Store) — an add-on that lets you install
+**HACS** (Home Assistant Community Store) — a tool that lets you install
 integrations that aren't shipped with Home Assistant by default.
 
 If you don't already have HACS, follow the official install guide:
