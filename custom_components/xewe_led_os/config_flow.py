@@ -1,9 +1,9 @@
-"""Config flow for XEWE LED-OS.
+"""Config flow for XeWe LED.
 
-Primary path: the device advertises `_xewe-led._tcp.local`, HA discovers it, the
-user enters the PIN shown by the device, and this flow forwards the (HA-managed)
-MQTT broker credentials to the device's local `/provision` endpoint. From then on
-the device self-publishes MQTT discovery and its entities appear automatically.
+Primary path: the device (in discovery mode) advertises `_xewe-led-os._tcp.local`,
+HA discovers it, the user confirms, and this flow forwards the (HA-managed) MQTT
+broker credentials to the device's local `/provision` endpoint. From then on the
+device self-publishes MQTT discovery and its entities appear automatically.
 """
 
 from __future__ import annotations
@@ -27,7 +27,6 @@ from .const import (
     CONF_BROKER_OVERRIDE,
     CONF_HOST,
     CONF_MAC,
-    CONF_PIN,
     DOMAIN,
     ISSUE_MQTT_NOT_CONFIGURED,
     LOCAL_BROKER_HOSTS,
@@ -38,7 +37,7 @@ from .const import (
 
 
 class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for XEWE LED-OS."""
+    """Handle a config flow for XeWe LED."""
 
     VERSION = 1
 
@@ -78,7 +77,7 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(self._mac)
         self._abort_if_unique_id_configured(updates={CONF_HOST: self._host})
 
-        self.context["title_placeholders"] = {"name": f"XEWE Dock {self._mac[-4:]}"}
+        self.context["title_placeholders"] = {"name": f"XeWe LED {self._mac[-4:]}"}
         return await self.async_step_pair()
 
     async def async_step_user(
@@ -100,7 +99,7 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_pair(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the PIN, then push broker credentials to the device."""
+        """Confirm pairing and push broker credentials to the device."""
         assert self._host is not None
 
         broker_default = await self._suggested_broker_host()
@@ -108,23 +107,16 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             broker = user_input.get(CONF_BROKER_OVERRIDE) or broker_default
-            error = await self._async_provision(
-                pin=user_input[CONF_PIN], broker_host=broker
-            )
+            error = await self._async_provision(broker_host=broker)
             if error is None:
                 return self.async_create_entry(
-                    title=f"XEWE Dock {(self._mac or self._host)[-4:]}",
+                    title=f"XeWe LED {(self._mac or self._host)[-4:]}",
                     data={CONF_HOST: self._host, CONF_MAC: self._mac},
                 )
             errors["base"] = error
 
         schema = self.add_suggested_values_to_schema(
-            vol.Schema(
-                {
-                    vol.Required(CONF_PIN): str,
-                    vol.Optional(CONF_BROKER_OVERRIDE): str,
-                }
-            ),
+            vol.Schema({vol.Optional(CONF_BROKER_OVERRIDE): str}),
             {CONF_BROKER_OVERRIDE: broker_default},
         )
         return self.async_show_form(
@@ -153,7 +145,7 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
                 return None
         return None
 
-    async def _async_provision(self, pin: str, broker_host: str | None) -> str | None:
+    async def _async_provision(self, broker_host: str | None) -> str | None:
         """POST broker credentials to the device. Return an error key or None."""
         if not broker_host:
             return "no_broker"
@@ -164,7 +156,6 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
             "port": data.get(CONF_PORT, 1883),
             "user": data.get(CONF_USERNAME) or "",
             "pass": data.get(CONF_PASSWORD) or "",
-            "pin": pin,
         }
         session = async_get_clientsession(self.hass)
         url = f"http://{self._host}{PROVISION_PATH}"
@@ -174,8 +165,6 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=PROVISION_TIMEOUT),
             ) as resp:
-                if resp.status == 403:
-                    return "invalid_pin"
                 if resp.status != 200:
                     return "cannot_connect"
         except (aiohttp.ClientError, asyncio.TimeoutError):

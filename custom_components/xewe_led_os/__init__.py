@@ -1,4 +1,4 @@
-"""The XEWE LED-OS integration.
+"""The XeWe LED integration.
 
 Entities are created by the firmware's own MQTT discovery messages. This
 integration's job is to (a) guarantee the MQTT integration is available and
@@ -17,7 +17,7 @@ from .const import DOMAIN, ISSUE_MQTT_NOT_CONFIGURED, MQTT_DOCS_URL
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up XEWE LED-OS from a config entry."""
+    """Set up XeWe LED from a config entry."""
     if not await mqtt.async_wait_for_mqtt_client(hass):
         ir.async_create_issue(
             hass,
