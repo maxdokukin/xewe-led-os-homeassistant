@@ -77,11 +77,16 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         assert self._host is not None
 
         broker_default = await self._suggested_broker_host()
+        mqtt_data = self._mqtt_data()
         errors: dict[str, str] = {}
 
         if user_input is not None:
             broker = user_input.get(CONF_BROKER_OVERRIDE) or broker_default
-            error = await self._async_provision(broker_host=broker)
+            error = await self._async_provision(
+                broker_host=broker,
+                username=user_input.get(CONF_USERNAME, ""),
+                password=user_input.get(CONF_PASSWORD, ""),
+            )
             if error is None:
                 return self.async_create_entry(
                     title=f"XeWe LED {(self._mac or self._host)[-4:]}",
@@ -89,9 +94,23 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             errors["base"] = error
 
+        suggested: dict[str, Any] = {
+            CONF_BROKER_OVERRIDE: broker_default,
+            CONF_USERNAME: mqtt_data.get(CONF_USERNAME, ""),
+            CONF_PASSWORD: mqtt_data.get(CONF_PASSWORD, ""),
+        }
+        if user_input is not None:
+            suggested.update(user_input)
+
         schema = self.add_suggested_values_to_schema(
-            vol.Schema({vol.Optional(CONF_BROKER_OVERRIDE): str}),
-            {CONF_BROKER_OVERRIDE: broker_default},
+            vol.Schema(
+                {
+                    vol.Optional(CONF_BROKER_OVERRIDE): str,
+                    vol.Optional(CONF_USERNAME): str,
+                    vol.Optional(CONF_PASSWORD): str,
+                }
+            ),
+            suggested,
         )
         return self.async_show_form(
             step_id="pair",
@@ -119,7 +138,9 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
                 return None
         return None
 
-    async def _async_provision(self, broker_host: str | None) -> str | None:
+    async def _async_provision(
+        self, broker_host: str | None, username: str, password: str
+    ) -> str | None:
         """POST broker credentials to the device. Return an error key or None."""
         if not broker_host:
             return "no_broker"
@@ -128,8 +149,8 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         payload = {
             "host": broker_host,
             "port": data.get(CONF_PORT, 1883),
-            "user": data.get(CONF_USERNAME) or "",
-            "pass": data.get(CONF_PASSWORD) or "",
+            "user": username or "",
+            "pass": password or "",
         }
         session = async_get_clientsession(self.hass)
         url = f"http://{self._host}{PROVISION_PATH}"
