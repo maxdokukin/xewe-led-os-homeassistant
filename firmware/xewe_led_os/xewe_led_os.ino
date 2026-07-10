@@ -26,7 +26,7 @@
 // ---- User configuration -----------------------------------------------------
 // Wi-Fi credentials live in wifi.h (gitignored). Copy wifi.h.example to wifi.h
 // and fill in WIFI_SSID / WIFI_PASS.
-#include "wifi.h"
+#include "wifi_c.h"
 
 #define LED_PIN 8               // GPIO the onboard LED/relay is wired to
 #define LED_ACTIVE_HIGH true    // set false if your LED/relay is active-low

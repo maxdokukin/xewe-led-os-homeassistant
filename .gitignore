@@ -3,5 +3,5 @@ __pycache__/
 .DS_Store
 .idea
 
-# Firmware Wi-Fi credentials (copy wifi.h.example to wifi.h)
-firmware/xewe_led_os/wifi.h
+# Firmware Wi-Fi credentials (copy wifi_c.h to wifi_c.h)
+firmware/xewe_led_os/wifi_c.h
