@@ -6,10 +6,9 @@
  *
  *   1. Connects to Wi-Fi using the credentials defined below.
  *   2. If not yet provisioned, prints a prompt on Serial. Press 'y' to enter
- *      DISCOVERY MODE for 5 minutes:
+ *      DISCOVERY MODE, which stays active until the device is provisioned:
  *        - advertise mDNS service _xewe-led-os._tcp.local (TXT: mac, fw)
  *        - accept POST /provision {host,port,user,pass} (no PIN)
- *      If the window elapses, it prints a timeout message; press 'y' to retry.
  *   3. On provision -> store broker creds in NVS, connect to MQTT, publish a
  *      RETAINED switch discovery config, and drive SWITCH_PIN.
  *
@@ -33,7 +32,6 @@
 #define SWITCH_PIN 8            // GPIO the relay/LED is wired to
 #define SWITCH_ACTIVE_HIGH true  // set false if your relay is active-low
 #define FW_VERSION "0.1.0"
-#define DISCOVERY_WINDOW_MS 300000UL  // 5 minutes
 #define MQTT_BUFFER_SIZE 1024         // MUST exceed the discovery JSON size
 
 // ---- Globals ----------------------------------------------------------------
@@ -52,7 +50,6 @@ uint16_t mqttPort = 1883;
 
 bool provisioned = false;
 bool pairing = false;
-unsigned long pairingStart = 0;
 bool switchState = false;
 
 // ---- Helpers ----------------------------------------------------------------
@@ -130,13 +127,43 @@ void handleProvision() {
 
   provisioned = true;
   pairing = false;
-  server.stop();
-  MDNS.end();
+  MDNS.end();  // stop advertising; keep the HTTP server up for /deprovision
+}
+
+// Factory reset: clear the retained MQTT discovery so HA drops the entity, wipe
+// stored broker creds, and reboot back into discovery mode. This is what makes
+// "delete the device in Home Assistant" actually release the hardware instead of
+// leaving a ghost behind.
+void handleDeprovision() {
+  server.send(200, "application/json", "{\"ok\":true}");
+  Serial.println("[deprovision] clearing broker creds + retained discovery");
+
+  if (mqtt.connected()) {
+    mqtt.publish(discoveryTopic.c_str(), "", true);  // empty retained = delete
+    mqtt.publish(stateTopic.c_str(), "", true);
+    mqtt.publish(availTopic.c_str(), "offline", true);
+    mqtt.loop();
+    delay(100);  // let the socket flush before we drop it
+    mqtt.disconnect();
+  }
+
+  prefs.begin("xewe", false);
+  prefs.clear();
+  prefs.end();
+  delay(200);
+  ESP.restart();
+}
+
+// The HTTP server runs in every state so a provisioned device can still be
+// factory-reset via /deprovision. /provision self-guards on `pairing`.
+void startWebServer() {
+  server.on("/provision", HTTP_POST, handleProvision);
+  server.on("/deprovision", HTTP_POST, handleDeprovision);
+  server.begin();
 }
 
 void startPairing() {
   pairing = true;
-  pairingStart = millis();
 
   String host = "xewe-led-os-" + macHex.substring(6);
   if (MDNS.begin(host.c_str())) {
@@ -144,24 +171,14 @@ void startPairing() {
     MDNS.addServiceTxt("_xewe-led-os", "_tcp", "mac", macHex);
     MDNS.addServiceTxt("_xewe-led-os", "_tcp", "fw", FW_VERSION);
   }
-  server.on("/provision", HTTP_POST, handleProvision);
-  server.begin();
 
   Serial.println("========================================");
-  Serial.println("[pair] DISCOVERY MODE active for 5 minutes");
+  Serial.println("[pair] DISCOVERY MODE active (stays on until provisioned)");
   Serial.printf("[pair] mDNS: %s._xewe-led-os._tcp.local  (%s)\n",
                 host.c_str(), WiFi.localIP().toString().c_str());
   Serial.println("[pair] Open HA > Settings > Devices & Services and configure");
   Serial.println("       the discovered XeWe LED.");
   Serial.println("========================================");
-}
-
-void stopPairing() {
-  pairing = false;
-  server.stop();
-  MDNS.end();
-  Serial.println("[pair] Discovery timed out.");
-  Serial.println("[pair] Press 'y' to retry.");
 }
 
 // ---- MQTT -------------------------------------------------------------------
@@ -256,6 +273,7 @@ void setup() {
 
   macHex = macToHex();
   buildTopics();
+  startWebServer();
 
   provisioned = loadCreds();
   if (provisioned) {
@@ -270,12 +288,12 @@ void loop() {
   if (provisioned) {
     if (!mqtt.connected()) connectMqtt();
     mqtt.loop();
+    server.handleClient();  // keep /deprovision reachable
     return;
   }
 
   if (pairing) {
     server.handleClient();
-    if ((millis() - pairingStart) > DISCOVERY_WINDOW_MS) stopPairing();
     return;
   }
 

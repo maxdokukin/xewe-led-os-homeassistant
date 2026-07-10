@@ -9,9 +9,13 @@ CONF_HOST = "host"
 CONF_MAC = "mac"
 CONF_BROKER_OVERRIDE = "broker_override"
 
-# Firmware HTTP provisioning endpoint
+# Firmware HTTP provisioning endpoints
 PROVISION_PATH = "/provision"
+DEPROVISION_PATH = "/deprovision"
 PROVISION_TIMEOUT = 10  # seconds
+
+# Home Assistant MQTT discovery prefix the firmware publishes under.
+DISCOVERY_PREFIX = "homeassistant"
 
 # Broker hostnames that are only reachable from *inside* the HA host and must be
 # rewritten to a LAN-reachable address before being handed to the ESP32.
