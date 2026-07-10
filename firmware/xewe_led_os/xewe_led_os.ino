@@ -413,6 +413,38 @@ void setMode(uint8_t newId) {
   publishParamStates();
 }
 
+// ---- Console output ---------------------------------------------------------
+// Dump the full LED data model to Serial. Printed whenever HA pushes an update
+// and whenever a local (Serial) command changes state.
+void printState() {
+  Serial.println("---- LED state ----");
+  Serial.printf("  name       : %s\n", deviceName.c_str());
+  Serial.printf("  power      : %s\n", lightOn ? "ON" : "OFF");
+  Serial.printf("  brightness : %u\n", brightness);
+  Serial.printf("  mode       : %u (%s)\n", modeId, MODES[modeId].name);
+  const Mode &m = MODES[modeId];
+  for (uint8_t i = 0; i < m.count; i++) {
+    Serial.printf("  %-12s: %-6u [%u..%u step %u]%s\n", m.params[i].key,
+                  paramValues[i], m.params[i].min, m.params[i].max,
+                  m.params[i].step, m.params[i].type == 'a' ? "  (advanced)" : "");
+  }
+  Serial.println("-------------------");
+}
+
+void printHelp() {
+  Serial.println("Serial commands (push local changes to Home Assistant):");
+  Serial.println("  on | off | toggle     turn the light on/off");
+  Serial.println("  b <0-255>             set brightness");
+  Serial.println("  mode <id|name>        change mode");
+  Serial.println("  set <key> <value>     set a param of the current mode");
+  Serial.println("  name <text>           rename the device");
+  Serial.println("  state                 print the current state");
+  Serial.println("  help                  show this help");
+  Serial.println("Modes:");
+  for (uint8_t i = 0; i < MODE_COUNT; i++)
+    Serial.printf("  %u = %s\n", i, MODES[i].name);
+}
+
 // ---- MQTT: commands ---------------------------------------------------------
 void handleLightCommand(const String &json) {
   JsonDocument doc;
@@ -432,7 +464,7 @@ void handleLightCommand(const String &json) {
   publishLightState();
 }
 
-void handleParamCommand(const String &key, const String &value) {
+bool handleParamCommand(const String &key, const String &value) {
   const Mode &m = MODES[modeId];
   for (uint8_t i = 0; i < m.count; i++) {
     if (key == m.params[i].key) {
@@ -440,9 +472,10 @@ void handleParamCommand(const String &key, const String &value) {
       v = constrain(v, m.params[i].min, m.params[i].max);
       paramValues[i] = (uint16_t)v;
       publishParamState(i);
-      return;
+      return true;
     }
   }
+  return false;
 }
 
 void onMessage(char *topic, byte *payload, unsigned int length) {
@@ -453,12 +486,17 @@ void onMessage(char *topic, byte *payload, unsigned int length) {
   String t(topic);
   if (t == lightCmdTopic) {
     handleLightCommand(msg);
+    Serial.printf("[ha->dev] light command: %s\n", msg.c_str());
+    printState();
     return;
   }
   String prefix = baseTopic + "/param/";
   if (t.startsWith(prefix) && t.endsWith("/set")) {
     String key = t.substring(prefix.length(), t.length() - 4);  // strip "/set"
-    handleParamCommand(key, msg);
+    if (handleParamCommand(key, msg)) {
+      Serial.printf("[ha->dev] param %s = %s\n", key.c_str(), msg.c_str());
+      printState();
+    }
   }
 }
 
@@ -483,6 +521,8 @@ void connectMqtt() {
       publishParamStates();
       mqtt.subscribe(lightCmdTopic.c_str());
       mqtt.subscribe((baseTopic + "/param/+/set").c_str());
+      Serial.println("[mqtt] ready. Type 'help' for Serial test commands.");
+      printState();
     } else {
       Serial.printf("[mqtt] failed rc=%d, retrying in 3s\n", mqtt.state());
       delay(3000);
@@ -497,6 +537,104 @@ bool pressedY() {
     if (c == 'y' || c == 'Y') return true;
   }
   return false;
+}
+
+// Non-blocking, line-buffered Serial reader. Returns true once a full line
+// (terminated by CR/LF) is available in `out`.
+String serialLine;
+bool readSerialLine(String &out) {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (serialLine.length() == 0) return false;
+      out = serialLine;
+      serialLine = "";
+      return true;
+    }
+    serialLine += c;
+  }
+  return false;
+}
+
+int parseMode(const String &s) {
+  bool numeric = s.length() > 0;
+  for (uint16_t i = 0; i < s.length(); i++)
+    if (!isDigit(s[i])) numeric = false;
+  if (numeric) {
+    int id = s.toInt();
+    return (id >= 0 && id < MODE_COUNT) ? id : -1;
+  }
+  for (uint8_t i = 0; i < MODE_COUNT; i++)
+    if (s.equalsIgnoreCase(MODES[i].name)) return i;
+  return -1;
+}
+
+// Simulate a device-originated change (physical button / HomeKit / Alexa): apply
+// it locally, publish to MQTT so it pushes to HA, then dump the new state.
+void handleSerialCommand(const String &raw) {
+  String line = raw;
+  line.trim();
+  if (line.length() == 0) return;
+
+  int sp = line.indexOf(' ');
+  String cmd = (sp < 0) ? line : line.substring(0, sp);
+  String rest = (sp < 0) ? "" : line.substring(sp + 1);
+  cmd.toLowerCase();
+  rest.trim();
+
+  if (cmd == "help" || cmd == "h" || cmd == "?") {
+    printHelp();
+    return;
+  }
+  if (cmd == "state" || cmd == "s") {
+    printState();
+    return;
+  }
+  if (cmd == "on" || cmd == "off" || cmd == "toggle" || cmd == "t") {
+    applyLight(cmd == "on" ? true : cmd == "off" ? false : !lightOn);
+    publishLightState();
+  } else if (cmd == "b" || cmd == "bright") {
+    brightness = (uint8_t)constrain(rest.toInt(), 0, 255);
+    publishLightState();
+  } else if (cmd == "mode" || cmd == "m") {
+    int id = parseMode(rest);
+    if (id < 0) {
+      Serial.printf("[dev->ha] unknown mode '%s' (try 'help')\n", rest.c_str());
+      return;
+    }
+    if ((uint8_t)id != modeId) setMode((uint8_t)id);
+    publishLightState();
+  } else if (cmd == "set") {
+    int s2 = rest.indexOf(' ');
+    if (s2 < 0) {
+      Serial.println("[dev->ha] usage: set <key> <value>");
+      return;
+    }
+    String key = rest.substring(0, s2);
+    String val = rest.substring(s2 + 1);
+    val.trim();
+    if (!handleParamCommand(key, val)) {
+      Serial.printf("[dev->ha] no param '%s' in mode '%s'\n", key.c_str(),
+                    MODES[modeId].name);
+      return;
+    }
+  } else if (cmd == "name") {
+    if (rest.length() == 0) {
+      Serial.println("[dev->ha] usage: name <text>");
+      return;
+    }
+    deviceName = rest;
+    // The device name rides the shared device block; republish discovery so HA
+    // picks up the rename for the light and every current number entity.
+    publishLightDiscovery();
+    publishParamDiscovery();
+  } else {
+    Serial.printf("[dev->ha] unknown command '%s' (try 'help')\n", cmd.c_str());
+    return;
+  }
+
+  Serial.println("[dev->ha] pushed update to Home Assistant:");
+  printState();
 }
 
 // ---- Arduino lifecycle ------------------------------------------------------
@@ -537,6 +675,8 @@ void loop() {
     if (!mqtt.connected()) connectMqtt();
     mqtt.loop();
     server.handleClient();  // keep /deprovision reachable
+    String line;
+    if (readSerialLine(line)) handleSerialCommand(line);
     return;
   }
 
