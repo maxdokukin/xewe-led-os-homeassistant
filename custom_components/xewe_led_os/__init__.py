@@ -57,10 +57,13 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         device_id = f"{DOMAIN}_{mac}"
         base = f"{DOMAIN}/{device_id}"
         # An empty retained payload deletes the retained message on the broker,
-        # which is what tells HA's MQTT integration to drop the entity.
+        # which is what tells HA's MQTT integration to drop the entity. This is
+        # a best-effort fallback for the light + shared topics only; the device's
+        # per-mode `number` entities use dynamic keys we can't know here, so the
+        # device-side /deprovision below is the authoritative cleanup path.
         for topic in (
             f"{DISCOVERY_PREFIX}/light/{device_id}/config",
-            f"{base}/state",
+            f"{base}/light/state",
             f"{base}/avail",
         ):
             try:
