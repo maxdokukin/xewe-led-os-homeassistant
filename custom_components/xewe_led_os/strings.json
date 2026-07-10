@@ -11,9 +11,11 @@
       },
       "pair": {
         "title": "Pair XeWe LED",
-        "description": "The device at {host} is in discovery mode. Submit to send the MQTT broker credentials to it automatically. Override the broker address only if the device cannot reach it.",
+        "description": "The device at {host} is in discovery mode. The broker address and login are pre-filled from Home Assistant. Adjust them only if the device cannot connect (for example, if the broker requires a dedicated username and password), then Submit to send them to the device.",
         "data": {
-          "broker_override": "MQTT broker address (optional)"
+          "broker_override": "MQTT broker address",
+          "username": "MQTT username",
+          "password": "MQTT password"
         }
       }
     },
@@ -23,14 +25,7 @@
     },
     "abort": {
       "already_configured": "This device is already configured.",
-      "no_mac": "The device did not advertise a MAC address and cannot be identified.",
-      "mqtt_not_configured": "MQTT isn't set up yet, so we've opened MQTT setup for you (on Home Assistant OS, choose \"Use the official Mosquitto MQTT Broker app\"). Finish that, then add XeWe LED again."
-    }
-  },
-  "issues": {
-    "mqtt_not_configured": {
-      "title": "XeWe LED requires MQTT",
-      "description": "XeWe LED needs the MQTT integration. Add it under Settings → Devices & Services → Add integration → MQTT (on Home Assistant OS, choose \"Use the official Mosquitto MQTT Broker app\"), then reload XeWe LED."
+      "no_mac": "The device did not advertise a MAC address and cannot be identified."
     }
   }
 }
