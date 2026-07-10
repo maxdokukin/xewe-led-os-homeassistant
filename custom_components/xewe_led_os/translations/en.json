@@ -2,30 +2,24 @@
   "config": {
     "flow_title": "{name}",
     "step": {
-      "user": {
+      "discovery_confirm": {
         "title": "Add XeWe LED",
-        "description": "Enter the IP address shown by the device on your network.",
-        "data": {
-          "host": "Device IP address"
-        }
-      },
-      "pair": {
-        "title": "Pair XeWe LED",
-        "description": "The device at {host} is in discovery mode. The broker address and login are pre-filled from Home Assistant. Adjust them only if the device cannot connect (for example, if the broker requires a dedicated username and password), then Submit to send them to the device.",
-        "data": {
-          "broker_override": "MQTT broker address",
-          "username": "MQTT username",
-          "password": "MQTT password"
-        }
+        "description": "Set up the XeWe LED at {host}?"
       }
     },
     "error": {
-      "cannot_connect": "Could not reach the device. Make sure it is still in discovery mode (press 'y' on the device to restart the 5-minute window), then try again.",
-      "no_broker": "Could not determine a broker address reachable by the device. Enter one manually."
+      "cannot_connect": "Could not reach the device. Make sure it is powered on and connected to the same network, then try again."
     },
     "abort": {
       "already_configured": "This device is already configured.",
       "no_mac": "The device did not advertise a MAC address and cannot be identified."
+    }
+  },
+  "entity": {
+    "button": {
+      "identify": {
+        "name": "Identify"
+      }
     }
   }
 }

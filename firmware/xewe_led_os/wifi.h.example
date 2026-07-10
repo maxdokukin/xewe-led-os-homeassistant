@@ -1,0 +1,6 @@
+#pragma once
+
+// Copy this file to wifi.h and fill in your network credentials.
+// wifi.h is gitignored so your secrets are never committed.
+#define WIFI_SSID "your-ssid"
+#define WIFI_PASS "your-password"

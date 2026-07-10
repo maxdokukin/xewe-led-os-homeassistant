@@ -26,8 +26,9 @@
 #include <ArduinoJson.h>
 
 // ---- User configuration -----------------------------------------------------
-#define WIFI_SSID "fuck villa torino"
-#define WIFI_PASS "xyrrAw-vytsed-votsi3"
+// Wi-Fi credentials live in wifi.h (gitignored). Copy wifi.h.example to wifi.h
+// and fill in WIFI_SSID / WIFI_PASS.
+#include "wifi.h"
 
 #define SWITCH_PIN 8            // GPIO the relay/LED is wired to
 #define SWITCH_ACTIVE_HIGH true  // set false if your relay is active-low

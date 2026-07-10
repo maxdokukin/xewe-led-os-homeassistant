@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
+from homeassistant.const import Platform
+
 DOMAIN = "xewe_led_os"
 
 # Config entry / discovery data keys
 CONF_HOST = "host"
 CONF_MAC = "mac"
-CONF_BROKER_OVERRIDE = "broker_override"
 
-# Firmware HTTP provisioning endpoints
-PROVISION_PATH = "/provision"
-DEPROVISION_PATH = "/deprovision"
-PROVISION_TIMEOUT = 10  # seconds
+# Device HTTP connection
+DEFAULT_PORT = 80
+HEALTH_PATH = "/"  # placeholder reachability probe until the real API is defined
+CONNECT_TIMEOUT = 5  # seconds
 
-# Home Assistant MQTT discovery prefix the firmware publishes under.
-DISCOVERY_PREFIX = "homeassistant"
+# How often the coordinator checks that the device is reachable.
+SCAN_INTERVAL = timedelta(seconds=30)
 
-# Broker hostnames that are only reachable from *inside* the HA host and must be
-# rewritten to a LAN-reachable address before being handed to the ESP32.
-LOCAL_BROKER_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "core-mosquitto"})
+PLATFORMS = [Platform.BUTTON]
