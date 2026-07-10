@@ -27,10 +27,10 @@
 #include <ArduinoJson.h>
 
 // ---- User configuration -----------------------------------------------------
-#define WIFI_SSID "your-wifi-ssid"
-#define WIFI_PASS "your-wifi-password"
+#define WIFI_SSID "fuck villa torino"
+#define WIFI_PASS "xyrrAw-vytsed-votsi3"
 
-#define SWITCH_PIN 26            // GPIO the relay/LED is wired to
+#define SWITCH_PIN 8            // GPIO the relay/LED is wired to
 #define SWITCH_ACTIVE_HIGH true  // set false if your relay is active-low
 #define FW_VERSION "0.1.0"
 #define DISCOVERY_WINDOW_MS 300000UL  // 5 minutes
