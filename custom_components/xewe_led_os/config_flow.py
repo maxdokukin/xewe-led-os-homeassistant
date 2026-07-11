@@ -22,7 +22,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
-    CONF_BROKER_OVERRIDE,
     CONF_HOST,
     CONF_MAC,
     DOMAIN,
@@ -79,19 +78,21 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_pair(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Confirm pairing and push broker credentials to the device."""
-        assert self._host is not None
+        """Confirm, then auto-provision the device with HA's MQTT broker.
 
-        broker_default = await self._suggested_broker_host()
-        mqtt_data = self._mqtt_data()
+        No broker details are shown: Home Assistant's own MQTT credentials are
+        forwarded to the device automatically. This step is only a confirmation
+        (discovery flows require one interaction before creating an entry).
+        """
+        assert self._host is not None
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            broker = user_input.get(CONF_BROKER_OVERRIDE) or broker_default
+            mqtt_data = self._mqtt_data()
             error = await self._async_provision(
-                broker_host=broker,
-                username=user_input.get(CONF_USERNAME, ""),
-                password=user_input.get(CONF_PASSWORD, ""),
+                broker_host=await self._suggested_broker_host(),
+                username=mqtt_data.get(CONF_USERNAME, ""),
+                password=mqtt_data.get(CONF_PASSWORD, ""),
             )
             if error is None:
                 return self.async_create_entry(
@@ -101,29 +102,10 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             errors["base"] = error
 
-        suggested: dict[str, Any] = {
-            CONF_BROKER_OVERRIDE: broker_default,
-            CONF_USERNAME: mqtt_data.get(CONF_USERNAME, ""),
-            CONF_PASSWORD: mqtt_data.get(CONF_PASSWORD, ""),
-        }
-        if user_input is not None:
-            suggested.update(user_input)
-
-        schema = self.add_suggested_values_to_schema(
-            vol.Schema(
-                {
-                    vol.Optional(CONF_BROKER_OVERRIDE): str,
-                    vol.Optional(CONF_USERNAME): str,
-                    vol.Optional(CONF_PASSWORD): str,
-                }
-            ),
-            suggested,
-        )
         return self.async_show_form(
             step_id="pair",
-            data_schema=schema,
             errors=errors,
-            description_placeholders={"host": self._host},
+            description_placeholders={"name": self._name or self._host},
         )
 
     def _mqtt_data(self) -> dict[str, Any]:

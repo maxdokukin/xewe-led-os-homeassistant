@@ -10,14 +10,12 @@
         }
       },
       "pair": {
-        "title": "Pair XeWe LED",
-        "description": "The device at {host} is in discovery mode. The broker address and login are pre-filled from Home Assistant. Adjust them only if the device cannot connect (for example, if the broker requires a dedicated username and password), then Submit to send them to the device.",
-        "data": {
-          "broker_override": "MQTT broker address",
-          "username": "MQTT username",
-          "password": "MQTT password"
-        }
+        "title": "Add {name}",
+        "description": "Home Assistant will connect {name} automatically using its own MQTT broker. Select Submit to add the device."
       }
+    },
+    "create_entry": {
+      "default": "Device added. Find it under Settings → Devices & Services → Devices, where you can rename it and assign it to an area."
     },
     "error": {
       "cannot_connect": "Could not reach the device. Make sure it is still in discovery mode (press 'y' on the device to re-enter it), then try again.",
