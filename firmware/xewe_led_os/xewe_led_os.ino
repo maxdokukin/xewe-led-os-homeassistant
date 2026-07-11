@@ -104,7 +104,7 @@ bool provisioned = false;
 bool pairing = false;
 
 // Mock device state.
-String deviceName = "XeWe LED";
+String deviceName = "Test Lights";
 bool lightOn = false;
 uint8_t brightness = 255;
 float hue = 0.0f;      // 0-360
@@ -280,7 +280,9 @@ void publishLightDiscovery() {
   JsonDocument doc;
   doc["~"] = baseTopic;
   doc["schema"] = "json";
-  doc["name"] = "XeWe LED";
+  // null -> the light entity inherits the device name (the name string that
+  // flows from here to the HA frontend), so it shows as e.g. "Test Lights".
+  doc["name"] = nullptr;
   doc["unique_id"] = deviceId + "_light";
   doc["command_topic"] = "~/light/set";
   doc["state_topic"] = "~/light/state";
