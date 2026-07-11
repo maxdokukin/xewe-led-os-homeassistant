@@ -105,7 +105,6 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="pair",
             errors=errors,
-            description_placeholders={"name": self._name or self._host},
         )
 
     def _mqtt_data(self) -> dict[str, Any]:

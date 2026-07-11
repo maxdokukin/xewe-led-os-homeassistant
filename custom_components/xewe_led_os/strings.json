@@ -10,8 +10,8 @@
         }
       },
       "pair": {
-        "title": "Add {name}",
-        "description": "Home Assistant will connect {name} automatically using its own MQTT broker. Select Submit to add the device."
+        "title": "Add XeWe LED",
+        "description": "Ready to pair."
       }
     },
     "create_entry": {
