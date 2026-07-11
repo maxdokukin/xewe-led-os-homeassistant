@@ -41,6 +41,7 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize the flow."""
         self._host: str | None = None
         self._mac: str | None = None
+        self._name: str | None = None
 
     async def async_step_zeroconf(
         self, discovery_info: ZeroconfServiceInfo
@@ -54,7 +55,12 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(self._mac)
         self._abort_if_unique_id_configured(updates={CONF_HOST: self._host})
 
-        self.context["title_placeholders"] = {"name": f"XeWe LED {self._mac[-4:]}"}
+        # The device advertises its name over mDNS; use it as the discovery card
+        # title (falling back to a mac-suffixed placeholder if it's absent).
+        self._name = discovery_info.properties.get("name") or (
+            f"XeWe LED {self._mac[-4:]}"
+        )
+        self.context["title_placeholders"] = {"name": self._name}
         return await self.async_step_pair()
 
     async def async_step_user(
@@ -89,7 +95,8 @@ class XeweLedConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             if error is None:
                 return self.async_create_entry(
-                    title=f"XeWe LED {(self._mac or self._host)[-4:]}",
+                    title=self._name
+                    or f"XeWe LED {(self._mac or self._host)[-4:]}",
                     data={CONF_HOST: self._host, CONF_MAC: self._mac},
                 )
             errors["base"] = error

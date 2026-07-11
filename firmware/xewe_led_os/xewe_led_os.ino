@@ -252,6 +252,9 @@ void startPairing() {
     MDNS.addService("_xewe-led-os", "_tcp", 80);
     MDNS.addServiceTxt("_xewe-led-os", "_tcp", "mac", macHex);
     MDNS.addServiceTxt("_xewe-led-os", "_tcp", "fw", FW_VERSION);
+    // Advertise the device name so HA can title the discovery card with it
+    // (the actual name, not a mac-suffixed placeholder).
+    MDNS.addServiceTxt("_xewe-led-os", "_tcp", "name", deviceName);
   }
 
   Serial.println("========================================");
