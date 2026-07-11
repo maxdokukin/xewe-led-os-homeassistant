@@ -5,7 +5,9 @@
  * mirroring how the real device's WebInterface models things:
  *
  *   - a device NAME (carried by the shared MQTT `device` block),
- *   - on/off STATE and BRIGHTNESS (0-255) on a JSON-schema MQTT `light`,
+ *   - on/off STATE, BRIGHTNESS (0-255) and COLOR (HS) on a JSON-schema MQTT
+ *     `light`. State/brightness/color are mode-agnostic — always present.
+ *     Saturation defaults to full, so the color picker acts as a hue control.
  *   - the active MODE as a plain integer (mock modes: Solid, Fade, Rainbow),
  *     exposed to HA as a `select` dropdown whose options are the mode names,
  *   - per-mode PARAMS as MQTT `number` entities: Solid none, Fade speed+depth,
@@ -105,6 +107,8 @@ bool pairing = false;
 String deviceName = "XeWe LED";
 bool lightOn = false;
 uint8_t brightness = 255;
+float hue = 0.0f;      // 0-360
+float sat = 100.0f;    // 0-100; defaults to full so color acts as a hue control
 uint8_t modeId = 0;
 
 // ---- Helpers ----------------------------------------------------------------
@@ -271,7 +275,7 @@ void addDevice(JsonDocument &doc) {
   dev["sw_version"] = FW_VERSION;
 }
 
-// One JSON-schema light carrying state + brightness.
+// One JSON-schema light carrying state + brightness + HS color.
 void publishLightDiscovery() {
   JsonDocument doc;
   doc["~"] = baseTopic;
@@ -284,6 +288,8 @@ void publishLightDiscovery() {
   doc["payload_available"] = "online";
   doc["payload_not_available"] = "offline";
   doc["brightness"] = true;
+  doc["color_mode"] = true;
+  doc["supported_color_modes"][0] = "hs";
   addDevice(doc);
 
   String payload;
@@ -339,6 +345,10 @@ void publishLightState() {
   JsonDocument doc;
   doc["state"] = lightOn ? "ON" : "OFF";
   doc["brightness"] = brightness;
+  doc["color_mode"] = "hs";
+  JsonObject color = doc["color"].to<JsonObject>();
+  color["h"] = hue;
+  color["s"] = sat;
   String payload;
   serializeJson(doc, payload);
   mqtt.publish(lightStateTopic.c_str(), payload.c_str(), true);
@@ -397,6 +407,7 @@ void printState() {
   Serial.printf("  name       : %s\n", deviceName.c_str());
   Serial.printf("  power      : %s\n", lightOn ? "ON" : "OFF");
   Serial.printf("  brightness : %u\n", brightness);
+  Serial.printf("  color      : hue=%.0f sat=%.0f\n", hue, sat);
   Serial.printf("  mode       : %u (%s)\n", modeId, MODE_NAMES[modeId]);
   for (uint8_t i = 0; i < PARAM_COUNT; i++) {
     if (modeHasParam(modeId, PARAMS[i].key))
@@ -410,6 +421,7 @@ void printHelp() {
   Serial.println("Serial commands (push local changes to Home Assistant):");
   Serial.println("  on | off | toggle     turn the light on/off");
   Serial.println("  b <0-255>             set brightness");
+  Serial.println("  color <hue> [sat]     set color (hue 0-360, sat 0-100)");
   Serial.println("  mode <id|name>        change mode");
   Serial.println("  set <key> <value>     set a param of the current mode");
   Serial.println("  name <text>           rename the device");
@@ -431,6 +443,11 @@ void handleLightCommand(const String &json) {
   if (doc["brightness"].is<int>()) {
     int b = doc["brightness"];
     brightness = (uint8_t)constrain(b, 0, 255);
+  }
+  if (doc["color"].is<JsonObject>()) {
+    JsonObject c = doc["color"];
+    if (!c["h"].isNull()) hue = constrain(c["h"].as<float>(), 0.0f, 360.0f);
+    if (!c["s"].isNull()) sat = constrain(c["s"].as<float>(), 0.0f, 100.0f);
   }
   publishLightState();
 }
@@ -563,6 +580,15 @@ void handleSerialCommand(const String &raw) {
     publishLightState();
   } else if (cmd == "b" || cmd == "bright") {
     brightness = (uint8_t)constrain(rest.toInt(), 0, 255);
+    publishLightState();
+  } else if (cmd == "color" || cmd == "c") {
+    int s2 = rest.indexOf(' ');
+    if (s2 < 0) {
+      hue = constrain(rest.toFloat(), 0.0f, 360.0f);
+    } else {
+      hue = constrain(rest.substring(0, s2).toFloat(), 0.0f, 360.0f);
+      sat = constrain(rest.substring(s2 + 1).toFloat(), 0.0f, 100.0f);
+    }
     publishLightState();
   } else if (cmd == "mode" || cmd == "m") {
     int id = parseMode(rest);
