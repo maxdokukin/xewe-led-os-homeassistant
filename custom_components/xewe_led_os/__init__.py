@@ -57,15 +57,23 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         device_id = f"{DOMAIN}_{mac}"
         base = f"{DOMAIN}/{device_id}"
         # An empty retained payload deletes the retained message on the broker,
-        # which is what tells HA's MQTT integration to drop the entity. This is
-        # a best-effort fallback for the light + shared topics only; the device's
-        # per-mode `number` entities use dynamic keys we can't know here, so the
-        # device-side /deprovision below is the authoritative cleanup path.
-        for topic in (
+        # which is what tells HA's MQTT integration to drop the entity. The
+        # device-side /deprovision below is the authoritative cleanup path; this
+        # is a best-effort fallback for when the device is unreachable.
+        topics = [
             f"{DISCOVERY_PREFIX}/light/{device_id}/config",
+            f"{DISCOVERY_PREFIX}/select/{device_id}/config",
             f"{base}/light/state",
+            f"{base}/mode/state",
             f"{base}/avail",
-        ):
+        ]
+        # Known mode params (see firmware PARAMS): clear their number discovery
+        # + state too, so no ghost controls linger if the device is unreachable.
+        for key in ("speed", "depth"):
+            topics.append(f"{DISCOVERY_PREFIX}/number/{device_id}/{key}/config")
+            topics.append(f"{base}/param/{key}/state")
+
+        for topic in topics:
             try:
                 await mqtt.async_publish(hass, topic, "", retain=True)
             except HomeAssistantError:
